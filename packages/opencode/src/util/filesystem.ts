@@ -117,7 +117,16 @@ export namespace Filesystem {
   // Also resolves symlinks so that callers using the result as a cache key
   // always get the same canonical path for a given physical directory.
   export function resolve(p: string): string {
-    const resolved = pathResolve(windowsPath(p))
+    const input = windowsPath(p)
+    let resolved = pathResolve(input)
+    if (
+      process.platform === "win32" &&
+      /^[\\/](?![\\/])/.test(input) &&
+      /^[a-zA-Z]:/.test(process.cwd()) &&
+      !/^[a-zA-Z]:/.test(resolved)
+    ) {
+      resolved = process.cwd().slice(0, 2) + resolved
+    }
     try {
       return normalizePath(realpathSync(resolved))
     } catch (e) {

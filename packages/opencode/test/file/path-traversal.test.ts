@@ -29,6 +29,11 @@ describe("Filesystem.contains", () => {
     expect(Filesystem.contains("/project", "/project-other/file")).toBe(false)
     expect(Filesystem.contains("/project", "/projectfile")).toBe(false)
   })
+
+  test("prefixes current drive for windows root-relative paths", () => {
+    if (process.platform !== "win32") return
+    expect(Filesystem.resolve("/etc/passwd")).toMatch(/^[A-Z]:\\/i)
+  })
 })
 
 /*
