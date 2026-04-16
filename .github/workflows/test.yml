@@ -24,10 +24,12 @@ jobs:
       matrix:
         settings:
           - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
+            upstream-host: blacksmith-4vcpu-ubuntu-2404
+            fork-host: ubuntu-latest
           - name: windows
-            host: blacksmith-4vcpu-windows-2025
-    runs-on: ${{ matrix.settings.host }}
+            upstream-host: blacksmith-4vcpu-windows-2025
+            fork-host: windows-latest
+    runs-on: ${{ github.repository == 'anomalyco/opencode' && matrix.settings.upstream-host || matrix.settings.fork-host }}
     defaults:
       run:
         shell: bash
@@ -56,12 +58,14 @@ jobs:
       matrix:
         settings:
           - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
+            upstream-host: blacksmith-4vcpu-ubuntu-2404
+            fork-host: ubuntu-latest
             playwright: bunx playwright install --with-deps
           - name: windows
-            host: blacksmith-4vcpu-windows-2025
+            upstream-host: blacksmith-4vcpu-windows-2025
+            fork-host: windows-latest
             playwright: bunx playwright install
-    runs-on: ${{ matrix.settings.host }}
+    runs-on: ${{ github.repository == 'anomalyco/opencode' && matrix.settings.upstream-host || matrix.settings.fork-host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: 0
     defaults:
