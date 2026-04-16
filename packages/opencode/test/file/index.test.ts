@@ -1,10 +1,15 @@
-import { describe, test, expect } from "bun:test"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { File } from "../../src/file"
+import { Ripgrep } from "../../src/file/ripgrep"
 import { Instance } from "../../src/project/instance"
 import { Filesystem } from "../../src/util/filesystem"
 import { tmpdir } from "../fixture/fixture"
+
+afterEach(() => {
+  mock.restore()
+})
 
 describe("file/index Filesystem patterns", () => {
   describe("File.read() - text content", () => {
@@ -204,6 +209,30 @@ describe("file/index Filesystem patterns", () => {
           expect(Array.isArray(nodes)).toBe(true)
         },
       })
+    })
+
+    test("ignores missing directory when background scan ends after teardown", async () => {
+      const missing = Object.assign(new Error("No such file or directory"), {
+        code: "ENOENT",
+        errno: -2,
+        path: "/tmp/opencode-test-missing",
+      })
+      const filesSpy = spyOn(Ripgrep, "files").mockImplementation(async function* () {
+        await Bun.sleep(0)
+        throw missing
+      })
+
+      await using tmp = await tmpdir()
+
+      await Instance.provide({
+        directory: tmp.path,
+        fn: async () => {
+          expect(await File.search({ query: "", type: "file" })).toEqual([])
+          expect(filesSpy).toHaveBeenCalledTimes(1)
+        },
+      })
+
+      await Bun.sleep(10)
     })
   })
 
