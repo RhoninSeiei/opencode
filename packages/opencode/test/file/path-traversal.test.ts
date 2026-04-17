@@ -6,6 +6,10 @@ import { File } from "../../src/file"
 import { Instance } from "../../src/project/instance"
 import { tmpdir } from "../fixture/fixture"
 
+function outsidePath(from: string, ...parts: string[]) {
+  return path.join(path.parse(from).root, "__opencode_external__", ...parts)
+}
+
 describe("Filesystem.contains", () => {
   test("allows paths within project", () => {
     expect(Filesystem.contains("/project", "/project/src")).toBe(true)
@@ -28,6 +32,11 @@ describe("Filesystem.contains", () => {
   test("handles prefix collision edge cases", () => {
     expect(Filesystem.contains("/project", "/project-other/file")).toBe(false)
     expect(Filesystem.contains("/project", "/projectfile")).toBe(false)
+  })
+
+  test("prefixes current drive for windows root-relative paths", () => {
+    if (process.platform !== "win32") return
+    expect(Filesystem.resolve("/etc/passwd")).toMatch(/^[A-Z]:\\/i)
   })
 })
 
@@ -148,12 +157,14 @@ describe("Instance.containsPath", () => {
 
   test("returns false for path outside both directory and worktree", async () => {
     await using tmp = await tmpdir({ git: true })
+    const externalFile = outsidePath(tmp.path, "passwd")
+    const externalProject = outsidePath(tmp.path, "other-project")
 
     await Instance.provide({
       directory: tmp.path,
       fn: () => {
-        expect(Instance.containsPath("/etc/passwd")).toBe(false)
-        expect(Instance.containsPath("/tmp/other-project")).toBe(false)
+        expect(Instance.containsPath(externalFile)).toBe(false)
+        expect(Instance.containsPath(externalProject)).toBe(false)
       },
     })
   })
@@ -171,27 +182,30 @@ describe("Instance.containsPath", () => {
 
   test("handles directory === worktree (running from repo root)", async () => {
     await using tmp = await tmpdir({ git: true })
+    const externalFile = outsidePath(tmp.path, "passwd")
 
     await Instance.provide({
       directory: tmp.path,
       fn: () => {
         expect(Instance.directory).toBe(Instance.worktree)
         expect(Instance.containsPath(path.join(tmp.path, "file.txt"))).toBe(true)
-        expect(Instance.containsPath("/etc/passwd")).toBe(false)
+        expect(Instance.containsPath(externalFile)).toBe(false)
       },
     })
   })
 
   test("non-git project does not allow arbitrary paths via worktree='/'", async () => {
     await using tmp = await tmpdir() // no git: true
+    const externalFile = outsidePath(tmp.path, "passwd")
+    const externalDir = outsidePath(tmp.path, "other")
 
     await Instance.provide({
       directory: tmp.path,
       fn: () => {
         // worktree is "/" for non-git projects, but containsPath should NOT allow all paths
         expect(Instance.containsPath(path.join(tmp.path, "file.txt"))).toBe(true)
-        expect(Instance.containsPath("/etc/passwd")).toBe(false)
-        expect(Instance.containsPath("/tmp/other")).toBe(false)
+        expect(Instance.containsPath(externalFile)).toBe(false)
+        expect(Instance.containsPath(externalDir)).toBe(false)
       },
     })
   })

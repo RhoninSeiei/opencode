@@ -1,0 +1,70 @@
+name: fork-release-cli
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, with or without a leading v"
+        required: true
+        type: string
+
+concurrency: ${{ github.workflow }}-${{ github.ref_name }}
+
+permissions:
+  contents: write
+
+env:
+  OPENCODE_RELEASE_REPO: RhoninSeiei/opencode
+  OPENCODE_INSTALLER_URL: https://raw.githubusercontent.com/RhoninSeiei/opencode/dev/install-fork.sh
+
+jobs:
+  release-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          raw="${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}"
+          echo "version=${raw#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "Fork CLI release for Linux installer and manual Ubuntu installs." \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+
+      - name: Build and upload CLI archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          OPENCODE_CHANNEL: latest
+          OPENCODE_VERSION: ${{ steps.version.outputs.version }}
+          OPENCODE_RELEASE: "1"
+        run: ./packages/opencode/script/build.ts
+
+      - name: Upload installer helpers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          cd packages/opencode/dist
+          sha256sum *.tar.gz *.zip > checksums.txt
+          gh release upload "v${{ steps.version.outputs.version }}" \
+            checksums.txt \
+            ../../install-fork.sh \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"

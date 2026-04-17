@@ -196,6 +196,12 @@ for (const item of targets) {
       OPENCODE_WORKER_PATH: workerPath,
       OPENCODE_CHANNEL: `'${Script.channel}'`,
       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
+      OPENCODE_INSTALLER_URL: process.env.OPENCODE_INSTALLER_URL
+        ? JSON.stringify(process.env.OPENCODE_INSTALLER_URL)
+        : "undefined",
+      OPENCODE_RELEASE_REPO: process.env.OPENCODE_RELEASE_REPO
+        ? JSON.stringify(process.env.OPENCODE_RELEASE_REPO)
+        : "undefined",
     },
   })
 

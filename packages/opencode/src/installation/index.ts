@@ -11,6 +11,8 @@ import { buffer } from "node:stream/consumers"
 declare global {
   const OPENCODE_VERSION: string
   const OPENCODE_CHANNEL: string
+  const OPENCODE_INSTALLER_URL: string | undefined
+  const OPENCODE_RELEASE_REPO: string | undefined
 }
 
 export namespace Installation {
@@ -24,8 +26,18 @@ export namespace Installation {
     }).then((x) => x.text)
   }
 
+  export function installerURL() {
+    if (typeof OPENCODE_INSTALLER_URL === "string" && OPENCODE_INSTALLER_URL) return OPENCODE_INSTALLER_URL
+    return process.env.OPENCODE_INSTALLER_URL || "https://opencode.ai/install"
+  }
+
+  export function releaseRepo() {
+    if (typeof OPENCODE_RELEASE_REPO === "string" && OPENCODE_RELEASE_REPO) return OPENCODE_RELEASE_REPO
+    return process.env.OPENCODE_RELEASE_REPO || "anomalyco/opencode"
+  }
+
   async function upgradeCurl(target: string) {
-    const body = await fetch("https://opencode.ai/install").then((res) => {
+    const body = await fetch(installerURL()).then((res) => {
       if (!res.ok) throw new Error(res.statusText)
       return res.text()
     })
@@ -293,7 +305,7 @@ export namespace Installation {
         .then((data: any) => data.version)
     }
 
-    return fetch("https://api.github.com/repos/anomalyco/opencode/releases/latest")
+    return fetch(`https://api.github.com/repos/${releaseRepo()}/releases/latest`)
       .then((res) => {
         if (!res.ok) throw new Error(res.statusText)
         return res.json()

@@ -338,62 +338,68 @@ export namespace File {
     let fetching = false
 
     const isGlobalHome = Instance.directory === Global.Path.home && Instance.project.id === "global"
+    const isMissingDirectory = (error: unknown) =>
+      typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
 
     const fn = async (result: Entry) => {
       // Disable scanning if in root of file system
       if (Instance.directory === path.parse(Instance.directory).root) return
       fetching = true
 
-      if (isGlobalHome) {
-        const dirs = new Set<string>()
-        const ignore = Protected.names()
+      try {
+        if (isGlobalHome) {
+          const dirs = new Set<string>()
+          const ignore = Protected.names()
 
-        const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
-        const shouldIgnore = (name: string) => name.startsWith(".") || ignore.has(name)
-        const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
+          const ignoreNested = new Set(["node_modules", "dist", "build", "target", "vendor"])
+          const shouldIgnore = (name: string) => name.startsWith(".") || ignore.has(name)
+          const shouldIgnoreNested = (name: string) => name.startsWith(".") || ignoreNested.has(name)
 
-        const top = await fs.promises
-          .readdir(Instance.directory, { withFileTypes: true })
-          .catch(() => [] as fs.Dirent[])
+          const top = await fs.promises
+            .readdir(Instance.directory, { withFileTypes: true })
+            .catch(() => [] as fs.Dirent[])
 
-        for (const entry of top) {
-          if (!entry.isDirectory()) continue
-          if (shouldIgnore(entry.name)) continue
-          dirs.add(entry.name + "/")
+          for (const entry of top) {
+            if (!entry.isDirectory()) continue
+            if (shouldIgnore(entry.name)) continue
+            dirs.add(entry.name + "/")
 
-          const base = path.join(Instance.directory, entry.name)
-          const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
-          for (const child of children) {
-            if (!child.isDirectory()) continue
-            if (shouldIgnoreNested(child.name)) continue
-            dirs.add(entry.name + "/" + child.name + "/")
+            const base = path.join(Instance.directory, entry.name)
+            const children = await fs.promises.readdir(base, { withFileTypes: true }).catch(() => [] as fs.Dirent[])
+            for (const child of children) {
+              if (!child.isDirectory()) continue
+              if (shouldIgnoreNested(child.name)) continue
+              dirs.add(entry.name + "/" + child.name + "/")
+            }
+          }
+
+          result.dirs = Array.from(dirs).toSorted()
+          cache = result
+          return
+        }
+
+        const set = new Set<string>()
+        for await (const file of Ripgrep.files({ cwd: Instance.directory })) {
+          result.files.push(file)
+          let current = file
+          while (true) {
+            const dir = path.dirname(current)
+            if (dir === ".") break
+            if (dir === current) break
+            current = dir
+            if (set.has(dir)) continue
+            set.add(dir)
+            result.dirs.push(dir + "/")
           }
         }
-
-        result.dirs = Array.from(dirs).toSorted()
         cache = result
+      } catch (error) {
+        if (!isMissingDirectory(error)) throw error
+      } finally {
         fetching = false
-        return
       }
-
-      const set = new Set<string>()
-      for await (const file of Ripgrep.files({ cwd: Instance.directory })) {
-        result.files.push(file)
-        let current = file
-        while (true) {
-          const dir = path.dirname(current)
-          if (dir === ".") break
-          if (dir === current) break
-          current = dir
-          if (set.has(dir)) continue
-          set.add(dir)
-          result.dirs.push(dir + "/")
-        }
-      }
-      cache = result
-      fetching = false
     }
-    fn(cache)
+    void fn(cache)
 
     return {
       async files() {
